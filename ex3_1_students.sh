@@ -1,75 +1,60 @@
 #!/bin/bash
 
-# Stop the script if an important command fails
 set -e
 
-# Exercise 3.1 — Bash student list processing
+# Exercise 3.1 — Final clean exam-style solution
 
 # 1.a Create students directory in home
 mkdir -p "$HOME/students"
 
-# Go to the students directory
-cd "$HOME/students" || exit
-
-# Define file name and URL
-file="LCP_22-23_students.csv"
+# Define file and URL
+file="$HOME/students/LCP_22-23_students.csv"
 url="https://www.dropbox.com/s/867rtx3az6e9gm8/LCP_22-23_students.csv?dl=1"
 
-# Check whether the file is already there
+# Download file only if it is not already there
 if [ -f "$file" ]; then
-    echo "$file already exists."
+    echo "CSV file already exists."
 else
-    echo "$file not found. Downloading..."
+    echo "CSV file not found. Downloading..."
 
-    # Use wget if available, otherwise use curl
     if command -v wget >/dev/null 2>&1; then
         wget -O "$file" "$url"
-    elif command -v curl >/dev/null 2>&1; then
-        curl -L -o "$file" "$url"
     else
-        echo "Error: neither wget nor curl is available."
-        exit 1
+        curl -L -o "$file" "$url"
     fi
 fi
 
-# Check that the file really exists after download
-if [ ! -f "$file" ]; then
-    echo "Error: download failed. CSV file was not created."
-    exit 1
-fi
+# 1.b Create files for PoD and Physics students
+awk -F',' 'NR > 1 && $4 == "PoD" {print $0}' "$file" > "$HOME/students/students_PoD.csv"
+awk -F',' 'NR > 1 && $4 == "Physics" {print $0}' "$file" > "$HOME/students/students_Physics.csv"
 
-echo "CSV file is ready."
-
-# Show first few lines to inspect the structure
-echo
-echo "First 5 lines of the file:"
-head -n 5 "$file"
-
-# 1.b Create two files: PoD students and Physics students
-grep "PoD" "$file" > students_PoD.csv || true
-grep "Physics" "$file" > students_Physics.csv || true
-
-# 1.c Count how many surnames start with each letter
-> surname_counts.txt
+# 1.c Count students whose surname starts with each letter
+> "$HOME/students/surname_counts.txt"
 
 for letter in {A..Z}
 do
-    count=$(awk -F',' -v l="$letter" 'toupper($1) ~ "^"l {count++} END {print count+0}' "$file")
-    echo "$letter $count" >> surname_counts.txt
+    awk -F',' -v letter="$letter" '
+    NR > 1 {
+        first_letter = toupper(substr($1, 1, 1))
+        if (first_letter == letter) {
+            count++
+        }
+    }
+    END {
+        print letter, count + 0
+    }
+    ' "$file" >> "$HOME/students/surname_counts.txt"
 done
 
-# 1.d Find the letter with the maximum count
-sort -k2 -nr surname_counts.txt | head -n 1 > most_common_letter.txt
+# 1.d Find the most common surname starting letter
+sort -k2,2nr "$HOME/students/surname_counts.txt" | head -n 1 > "$HOME/students/most_common_letter.txt"
 
-# 1.e Group students modulo 18
-rm -f group_*.txt
-
+# 1.e Split students into 18 groups using modulo 18
 awk -F',' '
-{
-    group = ((NR - 1) % 18) + 1
-    print $0 >> "group_" group ".txt"
+NR > 1 {
+    group = ((NR - 2) % 18) + 1
+    print $0 > ENVIRON["HOME"] "/students/group_" group ".txt"
 }
 ' "$file"
 
-echo
 echo "Exercise 3.1 completed."
